@@ -1,3 +1,6 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Boletim ASCOM</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -36,7 +39,7 @@ header.top p{margin:0;color:var(--muted);font-size:14px;max-width:62ch}
 .field label{font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
 .field .hint{margin:2px 0 0;font-size:12px;font-weight:400;color:var(--muted);line-height:1.5}
 input[type=text],input[type=url],textarea{
-  font:500 14.5px/1.4 var(--font);color:var(--fg);background:var(--bg);
+  font:500 16px/1.4 var(--font);color:var(--fg);background:var(--bg);
   border:1px solid var(--line);border-radius:9px;padding:10px 12px;width:100%;min-width:0}
 textarea{resize:vertical;min-height:64px;font-weight:400}
 input:focus-visible,textarea:focus-visible,button:focus-visible{outline:3px solid var(--accent);outline-offset:1px}
@@ -111,8 +114,8 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:3px soli
 
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 
-.toolfooter{display:flex;align-items:center;justify-content:center;gap:10px;padding-top:18px;margin-top:4px;border-top:1px solid var(--line)}
-.toolfooter img{height:28px;width:auto;display:block}
+.toolfooter{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding-top:22px;margin-top:4px;border-top:1px solid var(--line)}
+.toolfooter img{height:44px;width:auto;display:block}
 .toolfooter span{font:600 12.5px var(--font);color:var(--muted)}
 </style>
 
@@ -247,6 +250,18 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:3px soli
     }catch(e){ /* armazenamento indisponível: segue sem salvar rascunho */ }
   }
 
+  // ---------- atualização "ao vivo" da pré-visualização / rascunho, mas sem travar o celular a cada letra ----------
+  // reconstruir a pré-visualização inteira (com as fotos já embutidas) e regravar o rascunho no
+  // armazenamento do navegador são operações pesadas; se rodarem a cada tecla digitada, travam a
+  // digitação (principalmente em celulares mais simples). Por isso, ao digitar, esperamos uma pequena
+  // pausa antes de atualizar: a pré-visualização continua acompanhando o que é digitado, só que com
+  // um pequeno atraso, em vez de recalcular tudo a cada letra.
+  var livePreviewTimer = null;
+  function schedulePreviewAndSave(){
+    clearTimeout(livePreviewTimer);
+    livePreviewTimer = setTimeout(function(){ renderPreview(); saveDraft(); }, 180);
+  }
+
   function escapeHtml(s){
     return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
@@ -305,9 +320,9 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:3px soli
           '</div>' : '');
       itemsEl.appendChild(card);
 
-      card.querySelector('[data-act="title"]').addEventListener('input', function(e){ it.title=e.target.value; updateCounter(card,'title',it.title); if(it.title.trim()) e.target.closest('.field').classList.remove('invalid'); renderPreview(); saveDraft(); });
-      card.querySelector('[data-act="link"]').addEventListener('input', function(e){ it.link=e.target.value; if(isValidHttpUrl(it.link)) e.target.closest('.field').classList.remove('invalid'); renderPreview(); saveDraft(); });
-      card.querySelector('[data-act="summary"]').addEventListener('input', function(e){ it.summary=e.target.value; updateCounter(card,'summary',it.summary); if(it.summary.trim()) e.target.closest('.field').classList.remove('invalid'); renderPreview(); saveDraft(); });
+      card.querySelector('[data-act="title"]').addEventListener('input', function(e){ it.title=e.target.value; updateCounter(card,'title',it.title); if(it.title.trim()) e.target.closest('.field').classList.remove('invalid'); schedulePreviewAndSave(); });
+      card.querySelector('[data-act="link"]').addEventListener('input', function(e){ it.link=e.target.value; if(isValidHttpUrl(it.link)) e.target.closest('.field').classList.remove('invalid'); schedulePreviewAndSave(); });
+      card.querySelector('[data-act="summary"]').addEventListener('input', function(e){ it.summary=e.target.value; updateCounter(card,'summary',it.summary); if(it.summary.trim()) e.target.closest('.field').classList.remove('invalid'); schedulePreviewAndSave(); });
       updateCounter(card,'title',it.title);
       updateCounter(card,'summary',it.summary);
       card.querySelector('[data-act="photo"]').addEventListener('change', function(e){ handlePhoto(e.target.files[0], it); });
@@ -759,6 +774,20 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:3px soli
     return false;
   }
 
+  // antes de permitir uma notícia nova, exige que as já existentes estejam com título, link e resumo
+  // preenchidos: evita acumular cartões em branco que, mais tarde, barrariam a cópia/download mesmo
+  // assim (e que a pessoa pode esquecer de preencher)
+  function canAddItem(){
+    if(!state.length){ setStatus(''); return true; } // primeira notícia da lista: sempre pode criar
+    var problems = validateItems();
+    if(!problems.length){ setStatus(''); return true; }
+    showInvalid(problems);
+    var firstCard = itemsEl.children[problems[0].idx];
+    if(firstCard) firstCard.scrollIntoView({behavior:'smooth', block:'center'});
+    setStatus('Preencha título, link e resumo da notícia atual antes de adicionar uma nova (destacada em vermelho).', 'err');
+    return false;
+  }
+
   // ---------- copiar / baixar ----------
   document.getElementById('copyBtn').addEventListener('click', async function(){
     if(!checkBeforeExport()) return;
@@ -813,7 +842,7 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:3px soli
     }
   });
 
-  document.getElementById('addItem').addEventListener('click', function(){ addItem(); });
+  document.getElementById('addItem').addEventListener('click', function(){ if(!canAddItem()) return; addItem(); });
   document.getElementById('resetBtn').addEventListener('click', function(){
     var ok = window.confirm('Isso apaga tudo que está preenchido aqui (edição, data, áudio e todas as notícias) e começa um boletim em branco. Deseja continuar?');
     if(!ok) return;
@@ -824,11 +853,11 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:3px soli
     renderEditor(); renderPreview(); saveDraft();
     setStatus('Boletim limpo. Pronto para uma nova edição.', true);
   });
-  bEdicao.addEventListener('input', function(){ renderPreview(); saveDraft(); });
-  bData.addEventListener('input', function(){ renderPreview(); saveDraft(); });
+  bEdicao.addEventListener('input', function(){ schedulePreviewAndSave(); });
+  bData.addEventListener('input', function(){ schedulePreviewAndSave(); });
   bAudio.addEventListener('input', function(){
     if(isValidAudioUrl(bAudio.value)) setAudioValid(true);
-    renderPreview(); saveDraft();
+    schedulePreviewAndSave();
   });
   bAudioFile.addEventListener('change', function(e){
     var file = e.target.files[0];

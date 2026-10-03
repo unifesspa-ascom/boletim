@@ -57,7 +57,8 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:3px soli
 
 .item-body{display:grid;grid-template-columns:1fr;gap:12px}
 @media (min-width:560px){.item-body{grid-template-columns:140px 1fr}}
-.photo-upload{display:flex;flex-direction:column;gap:8px;align-items:center}
+.photo-col{display:flex;flex-direction:column;gap:8px;align-items:center;min-width:0}
+.photo-upload{display:flex;flex-direction:column;gap:8px;align-items:center;width:100%}
 .photo-box{width:100%;aspect-ratio:4/3;border-radius:10px;overflow:hidden;background:var(--bg);border:1.5px dashed var(--line);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative}
 .photo-box img{width:100%;height:100%;object-fit:cover;display:block}
 .photo-box .ph{display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--muted);font-size:11.5px;text-align:center;padding:8px}
@@ -98,7 +99,8 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:3px soli
 
 .preview-frame{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:12px;box-shadow:var(--shadow);min-width:0}
 .preview-scroll{max-height:72vh;overflow:auto;border-radius:10px;min-width:0}
-#emailRoot{background:#eef0ef}
+#emailScale{position:relative;overflow:hidden;background:#eef0ef}
+#emailRoot{width:600px;transform-origin:top left}
 
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
@@ -144,7 +146,7 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:3px soli
         <h2>Pré-visualização</h2>
       </div>
       <div class="preview-frame">
-        <div class="preview-scroll"><div id="emailRoot"></div></div>
+        <div class="preview-scroll"><div id="emailScale"><div id="emailRoot"></div></div></div>
       </div>
       <div class="preview-actions">
         <button class="btn btn-accent" id="copyBtn" type="button">
@@ -250,13 +252,15 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:3px soli
           '<button type="button" data-act="w-full" class="'+(it.wide?'active':'')+'">Largura total (banner)</button>'+
         '</div>'+
         '<div class="item-body">'+
-          '<label class="photo-upload">'+
-            '<div class="photo-box" style="aspect-ratio:'+dims.w+'/'+dims.h+'">'+
-              (it.photo ? '<img src="'+it.photo+'" alt="">' : '<span class="ph">'+svgPhotoIcon()+'Foto</span>') +
-              '<input type="file" accept="image/*" data-act="photo">'+
-            '</div>'+
-          '</label>'+
-          (it.photoRaw ? '<button type="button" class="crop-toggle" data-act="crop-toggle">'+(it.cropOpen?'Fechar ajuste':'Ajustar enquadramento')+'</button>' : '')+
+          '<div class="photo-col">'+
+            '<label class="photo-upload">'+
+              '<div class="photo-box" style="aspect-ratio:'+dims.w+'/'+dims.h+'">'+
+                (it.photo ? '<img src="'+it.photo+'" alt="">' : '<span class="ph">'+svgPhotoIcon()+'Foto</span>') +
+                '<input type="file" accept="image/*" data-act="photo">'+
+              '</div>'+
+            '</label>'+
+            (it.photoRaw ? '<button type="button" class="crop-toggle" data-act="crop-toggle">'+(it.cropOpen?'Fechar ajuste':'Ajustar enquadramento')+'</button>' : '')+
+          '</div>'+
           '<div class="fields">'+
             '<div class="field"><label>Título</label><input type="text" data-act="title" value="'+escapeHtml(it.title)+'" placeholder="Título da notícia (copiado do site)"><p class="counter" data-counter="title"></p></div>'+
             '<div class="field"><label>Link</label><input type="url" data-act="link" value="'+escapeHtml(it.link)+'" placeholder="https://unifesspa.edu.br/..."></div>'+
@@ -564,7 +568,7 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:3px soli
         inner =
           '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'+
             '<td width="50%" valign="top" style="width:50%;">'+itemCellHtml(row.items[0], false, limTitulo, limResumo)+'</td>'+
-            '<td width="32" style="width:32px;line-height:1px;font-size:1px;">&nbsp;</td>'+
+            '<td width="40" style="width:40px;line-height:1px;font-size:1px;">&nbsp;</td>'+
             '<td width="50%" valign="top" style="width:50%;">'+itemCellHtml(row.items[1], false, limTitulo, limResumo)+'</td>'+
           '</tr></table>';
       } else {
@@ -617,7 +621,25 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:3px soli
 
   function renderPreview(){
     emailRoot.innerHTML = buildEmailHtml(false);
+    fitPreviewScale();
   }
+
+  // o e-mail é montado sempre em 600px fixos (padrão de e-mail), mas a coluna de pré-visualização
+  // costuma ser mais estreita que isso; em vez de cortar o conteúdo com uma barra de rolagem lateral,
+  // reduz a escala do boletim inteiro para caber na largura disponível, como uma miniatura fiel
+  var emailScale = document.getElementById('emailScale');
+  function fitPreviewScale(){
+    if(!emailScale) return;
+    var containerWidth = emailScale.parentElement.clientWidth;
+    var scale = Math.min(1, containerWidth / 600);
+    emailRoot.style.transform = 'scale('+scale+')';
+    var h = emailRoot.offsetHeight;
+    emailScale.style.height = Math.ceil(h*scale)+'px';
+  }
+  window.addEventListener('resize', function(){
+    clearTimeout(window.__fitTimer);
+    window.__fitTimer = setTimeout(fitPreviewScale, 120);
+  });
 
   function fullDocument(){
     return '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">'+

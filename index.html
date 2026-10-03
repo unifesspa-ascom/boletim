@@ -105,8 +105,8 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:3px soli
 
 <div class="page">
   <header class="top">
-    <h1>Boletim ASCOM</h1>
-    <p>Monte o boletim semanal com quantas notícias precisar, cada uma com foto, título, link e resumo. Quando terminar, copie e cole no corpo do e-mail, sem precisar redimensionar nada.</p>
+    <h1>Boletim Semanal ASCOM</h1>
+    <p>Adicione quantas notícias forem necessárias, cada uma com foto, título, link e resumo, na ordem em que devem aparecer. Ao final, copie e cole o conteúdo pronto no corpo do e-mail.</p>
   </header>
 
   <section class="meta">
@@ -119,18 +119,12 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:3px soli
       <input type="text" id="bData" placeholder="Ex.: 3 de outubro de 2026">
     </div>
     <div class="field" style="grid-column:1/-1">
-      <label for="bAudio">Link do áudio do boletim (opcional)</label>
+      <label for="bAudioFile">Áudio do boletim (opcional)</label>
+      <input type="file" id="bAudioFile" accept="audio/*">
+      <p class="hint">Selecione aqui o arquivo do seu computador só para gerar automaticamente o nome e o link abaixo. Essa página não tem como enviar o arquivo sozinha (ela não se conecta a nenhum servidor): depois de selecionar, suba esse mesmo arquivo, com esse mesmo nome, na pasta de áudios do boletim no GitHub.</p>
+      <label for="bAudio" style="display:block;margin-top:10px;">Link do áudio</label>
       <input type="url" id="bAudio" placeholder="https://unifesspa-ascom.github.io/boletim/audio/boletim-ed42.mp3">
       <p class="hint">Use um nome de arquivo diferente a cada edição (ex.: incluindo o número da edição), sem nunca substituir o anterior. Assim cada email continua apontando para o áudio certo mesmo depois de semanas, e quem recebeu edições antigas não perde o acesso.</p>
-    </div>
-    <div class="field">
-      <label for="bLimTitulo">Limite de caracteres do título</label>
-      <input type="number" id="bLimTitulo" value="90" min="20" max="300" step="1">
-    </div>
-    <div class="field">
-      <label for="bLimResumo">Limite de caracteres do resumo</label>
-      <input type="number" id="bLimResumo" value="220" min="40" max="800" step="1">
-      <p class="hint">Cole o título e o resumo da notícia (copiados do site pela equipe) em cada item abaixo. Ao passar do limite, o texto final do boletim é cortado automaticamente no fim da última palavra que couber, sem precisar editar nada.</p>
     </div>
   </section>
 
@@ -181,14 +175,15 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:3px soli
     {url:'https://x.com/unifesspa', icon:ICON_X, handle:'/unifesspa'}
   ];
   var DRAFT_KEY = "boletim-ascom-draft-v1";
+  var LIM_TITULO = 90; // limite de caracteres do título, usado no corte automático do texto final
+  var LIM_RESUMO = 220; // limite de caracteres do resumo, usado no corte automático do texto final
 
   var itemsEl = document.getElementById('items');
   var emailRoot = document.getElementById('emailRoot');
   var bEdicao = document.getElementById('bEdicao');
   var bData = document.getElementById('bData');
   var bAudio = document.getElementById('bAudio');
-  var bLimTitulo = document.getElementById('bLimTitulo');
-  var bLimResumo = document.getElementById('bLimResumo');
+  var bAudioFile = document.getElementById('bAudioFile');
   var statusEl = document.getElementById('status');
 
   var uid = 0;
@@ -218,8 +213,7 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:3px soli
   function saveDraft(){
     try{
       localStorage.setItem(DRAFT_KEY, JSON.stringify({
-        edicao: bEdicao.value, data: bData.value, audio: bAudio.value,
-        limTitulo: bLimTitulo.value, limResumo: bLimResumo.value, items: state
+        edicao: bEdicao.value, data: bData.value, audio: bAudio.value, items: state
       }));
     }catch(e){ /* armazenamento indisponível: segue sem salvar rascunho */ }
   }
@@ -264,9 +258,9 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:3px soli
           '</label>'+
           (it.photoRaw ? '<button type="button" class="crop-toggle" data-act="crop-toggle">'+(it.cropOpen?'Fechar ajuste':'Ajustar enquadramento')+'</button>' : '')+
           '<div class="fields">'+
-            '<div class="field"><label>Título</label><input type="text" data-act="title" value="'+escapeHtml(it.title)+'" placeholder="Título da notícia"><p class="counter" data-counter="title"></p></div>'+
+            '<div class="field"><label>Título</label><input type="text" data-act="title" value="'+escapeHtml(it.title)+'" placeholder="Título da notícia (copiado do site)"><p class="counter" data-counter="title"></p></div>'+
             '<div class="field"><label>Link</label><input type="url" data-act="link" value="'+escapeHtml(it.link)+'" placeholder="https://unifesspa.edu.br/..."></div>'+
-            '<div class="field"><label>Resumo</label><textarea data-act="summary" placeholder="Resumo curto da notícia">'+escapeHtml(it.summary)+'</textarea><p class="counter" data-counter="summary"></p></div>'+
+            '<div class="field"><label>Resumo</label><textarea data-act="summary" placeholder="Resumo curto da notícia (copiado do site)">'+escapeHtml(it.summary)+'</textarea><p class="counter" data-counter="summary"></p></div>'+
           '</div>'+
         '</div>'+
         (it.cropOpen && it.photoRaw ?
@@ -293,7 +287,11 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:3px soli
 
       var cropToggleBtn = card.querySelector('[data-act="crop-toggle"]');
       if(cropToggleBtn){
-        cropToggleBtn.addEventListener('click', function(){ it.cropOpen = !it.cropOpen; renderEditor(); });
+        cropToggleBtn.addEventListener('click', function(){
+          it.cropOpen = !it.cropOpen;
+          renderEditor();
+          if(it.cropOpen) scrollToCropPanel(it);
+        });
       }
       var cropFrame = card.querySelector('[data-act="crop-frame"]');
       if(cropFrame){
@@ -364,6 +362,15 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:3px soli
     if(img) img.src = it.photo;
   }
 
+  // depois de enviar uma foto (ou abrir o ajuste), rola a tela até o painel de recorte,
+  // porque ele aparece mais abaixo no card e passava despercebido
+  function scrollToCropPanel(it){
+    var card = itemsEl.children[state.indexOf(it)];
+    if(!card) return;
+    var panel = card.querySelector('.crop-panel') || card;
+    panel.scrollIntoView({behavior:'smooth', block:'center'});
+  }
+
   function loadRawImg(it, cb){
     if(imgCache[it.id]){ cb(imgCache[it.id]); return; }
     if(!it.photoRaw){ cb(null); return; }
@@ -413,7 +420,7 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:3px soli
       it.photoPos = {x:50,y:50}; it.photoZoom = 1; it.cropOpen = true;
       delete imgCache[it.id];
       URL.revokeObjectURL(url);
-      bakeCrop(it, function(){ renderEditor(); renderPreview(); saveDraft(); });
+      bakeCrop(it, function(){ renderEditor(); renderPreview(); saveDraft(); scrollToCropPanel(it); });
     };
     img.onerror=function(){ URL.revokeObjectURL(url); setStatus('Não foi possível abrir essa imagem.'); };
     img.src = url;
@@ -422,7 +429,7 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:3px soli
   function updateCounter(card, kind, text){
     var el = card.querySelector('[data-counter="'+kind+'"]');
     if(!el) return;
-    var limit = kind==='title' ? (parseInt(bLimTitulo.value,10)||90) : (parseInt(bLimResumo.value,10)||220);
+    var limit = kind==='title' ? LIM_TITULO : LIM_RESUMO;
     var len = (text||'').length;
     el.textContent = len + '/' + limit + ' caracteres';
     el.className = 'counter' + (len>limit ? ' over' : '');
@@ -547,8 +554,8 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:3px soli
         '</table>';
     }
 
-    var limTitulo = parseInt(bLimTitulo.value,10)||90;
-    var limResumo = parseInt(bLimResumo.value,10)||220;
+    var limTitulo = LIM_TITULO;
+    var limResumo = LIM_RESUMO;
     var rows = groupRows();
 
     var itemsHtml = rows.map(function(row, idx){
@@ -557,7 +564,7 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:3px soli
         inner =
           '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>'+
             '<td width="50%" valign="top" style="width:50%;">'+itemCellHtml(row.items[0], false, limTitulo, limResumo)+'</td>'+
-            '<td width="16" style="width:16px;line-height:1px;font-size:1px;">&nbsp;</td>'+
+            '<td width="32" style="width:32px;line-height:1px;font-size:1px;">&nbsp;</td>'+
             '<td width="50%" valign="top" style="width:50%;">'+itemCellHtml(row.items[1], false, limTitulo, limResumo)+'</td>'+
           '</tr></table>';
       } else {
@@ -677,8 +684,17 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:3px soli
   bEdicao.addEventListener('input', function(){ renderPreview(); saveDraft(); });
   bData.addEventListener('input', function(){ renderPreview(); saveDraft(); });
   bAudio.addEventListener('input', function(){ renderPreview(); saveDraft(); });
-  bLimTitulo.addEventListener('input', function(){ updateAllCounters(); renderPreview(); saveDraft(); });
-  bLimResumo.addEventListener('input', function(){ updateAllCounters(); renderPreview(); saveDraft(); });
+  bAudioFile.addEventListener('change', function(e){
+    var file = e.target.files[0];
+    if(!file) return;
+    var ext = (file.name.split('.').pop() || 'mp3').toLowerCase();
+    var edicao = (bEdicao.value||'').trim().replace(/[^a-zA-Z0-9]/g,'');
+    var slug = edicao ? ('boletim-ed'+edicao) : file.name.replace(/\.[^.]+$/,'').toLowerCase().replace(/[^a-z0-9-_]+/g,'-');
+    var filename = slug+'.'+ext;
+    bAudio.value = 'https://unifesspa-ascom.github.io/boletim/audio/'+filename;
+    setStatus('Nome sugerido: '+filename+'. Suba esse arquivo com esse nome na pasta de áudios do GitHub.', true);
+    renderPreview(); saveDraft();
+  });
 
   // ---------- inicialização ----------
   var draft = loadDraft();
@@ -686,18 +702,12 @@ input:focus-visible,textarea:focus-visible,button:focus-visible{outline:3px soli
     bEdicao.value = draft.edicao || '';
     bData.value = draft.data || '';
     bAudio.value = draft.audio || '';
-    bLimTitulo.value = draft.limTitulo || bLimTitulo.value;
-    bLimResumo.value = draft.limResumo || bLimResumo.value;
     state = draft.items.map(function(it){ return newItem(it); });
     // reaquece o cache das imagens originais, para o reenquadramento e a promoção automática
     // a "largura total" funcionarem sem precisar reenviar a foto
     state.forEach(function(it){ if(it.photoRaw) loadRawImg(it, function(){ renderPreview(); }); });
   } else {
-    addItem({
-      title: 'Exemplo: edite ou remova este item',
-      link: '',
-      summary: 'Escreva aqui o resumo da notícia. Clique na foto ao lado para enviar a imagem correspondente, e use as setas para reordenar.'
-    });
+    addItem();
   }
   renderEditor();
   renderPreview();
